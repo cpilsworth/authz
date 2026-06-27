@@ -3,7 +3,11 @@
 // DA admin base + token-fresh fetch, same wiring the platform tools use.
 const { getDaAdmin } = await import('https://da.live/nx/public/utils/constants.js');
 const DA_ADMIN = getDaAdmin();
-const { daFetch } = await import('https://da.live/nx/utils/daFetch.js');
+const { daFetch, initIms } = await import('https://da.live/nx/utils/daFetch.js');
+
+// Publisher Worker that reads DA config, validates/signs the policy, and writes it to KV
+// for the delivery worker to enforce. Distinct from the delivery worker.
+export const PUBLISHER_URL = 'https://oidc-worker-gate-policy-publisher.cpilsworth.workers.dev/';
 
 // The access-control policy lives as a NAMED SHEET ("access-control") inside the
 // SITE config multi-sheet at `${DA_ADMIN}/config/{org}/{site}/`. It is read/written as
@@ -101,5 +105,50 @@ export async function fetchSiteList(org) {
     return items.filter((item) => !item.ext).map((item) => item.name);
   } catch {
     return [];
+  }
+}
+
+/** Resolve a fresh IMS access token, falling back to one captured earlier. */
+export async function getAccessToken(fallback) {
+  try {
+    const { accessToken } = await initIms();
+    return accessToken?.token || fallback || '';
+  } catch {
+    return fallback || '';
+  }
+}
+
+/**
+ * Ask the publisher Worker to re-read DA config, re-validate/sign the policy, and write it
+ * to KV for the delivery worker. The publisher reads DA itself using the bearer token; we
+ * do not send rule content.
+ * @returns {{ success:boolean, status:number, result?:object, error?:string }}
+ */
+export async function publishPolicy(org, site, token, sourceVersion) {
+  const body = { site_id: `${org}/${site}` };
+  if (sourceVersion) body.source_version = sourceVersion;
+  try {
+    const res = await fetch(PUBLISHER_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    let result = null;
+    try { result = await res.json(); } catch { /* non-JSON response */ }
+    if (!res.ok) {
+      return {
+        success: false,
+        status: res.status,
+        error: result?.error || result?.message || `HTTP ${res.status}`,
+      };
+    }
+    return { success: true, status: res.status, result };
+  } catch (e) {
+    // A failed CORS preflight surfaces here as a TypeError with no status.
+    return { success: false, status: 0, error: e.message };
   }
 }

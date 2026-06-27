@@ -7,6 +7,8 @@ import {
   withPolicyRows,
   updateSiteConfig,
   fetchSiteList,
+  getAccessToken,
+  publishPolicy,
 } from './api.js';
 import {
   TIERS,
@@ -73,6 +75,7 @@ class DaAccessControlApp extends LitElement {
     _dirty: { state: true },
     _readOnly: { state: true },
     _saving: { state: true },
+    _publishing: { state: true },
     _message: { state: true },
   };
 
@@ -92,6 +95,7 @@ class DaAccessControlApp extends LitElement {
     this._dirty = false;
     this._readOnly = false;
     this._saving = false;
+    this._publishing = false;
     this._message = null;
 
     this._beforeUnload = (e) => {
@@ -196,6 +200,43 @@ class DaAccessControlApp extends LitElement {
           ? `Save failed: you lack write access (HTTP ${status}).`
           : `Save failed (${error || 'unknown error'}).`,
       };
+    }
+  }
+
+  async publish() {
+    if (this._publishing) return;
+    if (this._dirty) {
+      this._message = { type: 'warning', text: 'Save your changes before publishing to the worker.' };
+      return;
+    }
+    this._publishing = true;
+    this._message = null;
+    const token = await getAccessToken(this.token);
+    // Marker only, for the publisher's status log; it reads + versions DA itself.
+    const sourceVersion = new Date().toISOString();
+    const {
+      success, status, result, error,
+    } = await publishPolicy(
+      this._org,
+      this._site,
+      token,
+      sourceVersion,
+    );
+    this._publishing = false;
+    if (success) {
+      const r = result || {};
+      const warns = Array.isArray(r.warnings) && r.warnings.length
+        ? ` ${r.warnings.length} warning(s).` : '';
+      this._message = {
+        type: 'success',
+        text: `Published v${r.version || '?'} — ${r.rules ?? '?'} rule(s), ${r.ignored_rules ?? 0} ignored.${warns}`,
+      };
+    } else if (status === 401 || status === 403) {
+      this._message = { type: 'error', text: `Publish failed: not authorized (HTTP ${status}). Try reloading the tool.` };
+    } else if (status === 0) {
+      this._message = { type: 'error', text: `Publish failed: could not reach the publisher (likely CORS or network). ${error || ''}` };
+    } else {
+      this._message = { type: 'error', text: `Publish failed (${error || `HTTP ${status}`}).` };
     }
   }
 
@@ -319,6 +360,10 @@ class DaAccessControlApp extends LitElement {
       <div class="dac-toolbar">
         <h1>Access Control${this._org ? html` <span class="dac-scope">${this._org}/${this._site}</span>` : nothing}</h1>
         <div class="dac-toolbar-actions">
+          ${this._org && this._state === 'ready' ? html`
+            <button class="dac-btn" ?disabled=${this._publishing || this._dirty}
+              title=${this._dirty ? 'Save your changes before publishing.' : 'Re-read, validate, sign and push the policy to the access-control worker.'}
+              @click=${() => this.publish()}>${this._publishing ? 'Publishing…' : 'Publish to worker'}</button>` : nothing}
           ${this._readOnly ? html`<span class="dac-readonly">Read only</span>` : html`
             <button class="dac-btn" ?disabled=${this._saving} @click=${() => this.addRow()}>${icon('add')} Add row</button>
             <button class="dac-btn dac-btn-primary" ?disabled=${this._saving || hasErrors || !this._dirty}

@@ -352,8 +352,13 @@ customElements.define('da-access-control-app', DaAccessControlApp);
 (async function init() {
   let context = {};
   let token = '';
+  // DA_SDK resolves only inside the da.live parent frame. Race it against a timeout so
+  // the UI still renders (driven by ?org=&site=) if the handshake stalls or is absent.
   try {
-    ({ context, token } = await DA_SDK);
+    const timeout = new Promise((resolve) => { setTimeout(() => resolve(null), 3000); });
+    const sdk = await Promise.race([DA_SDK, timeout]);
+    if (sdk) ({ context, token } = sdk);
+    else console.warn('[da-access-control] DA SDK did not resolve; falling back to URL params.');
   } catch (e) {
     console.warn('[da-access-control] DA SDK unavailable:', e);
   }

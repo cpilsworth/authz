@@ -154,7 +154,13 @@ class DaAccessControlApp extends LitElement {
 
   // --- row editing ---
   updateCell(index, key, value) {
-    const rows = this._rows.map((r, i) => (i === index ? { ...r, [key]: value } : r));
+    const rows = this._rows.map((r, i) => {
+      if (i !== index) return r;
+      const next = { ...r, [key]: value };
+      // A public row must not have an audience; clear it when switching to public.
+      if (key === 'tier' && value.trim().toLowerCase() === 'public') next.audience = '';
+      return next;
+    });
     this._rows = rows;
     this._dirty = true;
     this.revalidate();
@@ -299,6 +305,7 @@ class DaAccessControlApp extends LitElement {
   renderRow(row, i) {
     const rr = this._validation?.rows?.[i] || { errors: {}, warnings: {} };
     const ro = this._readOnly;
+    const isPublic = (row.tier || '').trim().toLowerCase() === 'public';
     const cls = (key) => {
       if (rr.errors?.[key]) return 'dac-cell has-error';
       if (rr.warnings?.[key]) return 'dac-cell has-warning';
@@ -318,9 +325,11 @@ class DaAccessControlApp extends LitElement {
           ${renderCellMsg(rr, 'tier')}
         </td>
         <td class=${cls('audience')}>
-          <input type="text" .value=${row.audience || ''} ?disabled=${ro}
+          <input type="text" .value=${row.audience || ''}
+            ?disabled=${ro || isPublic}
             list="dac-audiences"
-            @input=${(e) => this.updateCell(i, 'audience', e.target.value)} placeholder="audience, audience" />
+            @input=${(e) => this.updateCell(i, 'audience', e.target.value)}
+            placeholder=${isPublic ? 'n/a for public' : 'audience, audience'} />
           ${renderCellMsg(rr, 'audience')}
         </td>
         <td class=${cls('description')}>

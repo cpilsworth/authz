@@ -11,6 +11,7 @@ export const ENFORCED_COLUMNS = ['path', 'tier', 'audience', 'description'];
 // overlap these are ignored by the worker, not enforced. Editable by the operator.
 export const RESERVED_PATHS = [
   '/.auth/**',
+  '/error/**',
   '/scripts/**',
   '/styles/**',
   '/blocks/**',

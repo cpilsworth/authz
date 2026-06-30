@@ -14,6 +14,7 @@ import {
   TIERS,
   validateRows,
   collectAudiences,
+  RESERVED_PATHS,
 } from './validation.js';
 import icon from './icons.js';
 
@@ -57,6 +58,41 @@ function msgIcon(type) {
   if (type === 'success') return icon('check');
   if (type === 'error') return icon('error');
   return icon('warning');
+}
+
+// Concise constraint reference. Anchored to the oidc-worker-gate publisher rules
+// (the authoritative validator), not just the advisory inline checks — so it also
+// names rules the form does not pre-flag but that still fail on publish.
+function renderHelp() {
+  return html`
+    <details class="dac-help">
+      <summary>Rule constraints</summary>
+      <div class="dac-help-body">
+        <dl>
+          <dt>Path</dt>
+          <dd>Required. Absolute (starts with <code>/</code>), no <code>?</code> or <code>#</code>.
+            Most-specific rule wins; unmatched paths default to <strong>protected</strong>.</dd>
+          <dt>Tier</dt>
+          <dd>Required. <code>public</code> (no sign-in), <code>protected</code> (sign-in; redirects to login),
+            or <code>secured</code> (sign-in; APIs get a 401 instead of a redirect).</dd>
+          <dt>Audience</dt>
+          <dd>Comma-separated names; empty means any signed-in user. A <code>public</code> row must have none.
+            Names must be known audiences.</dd>
+          <dt>Description</dt>
+          <dd>Optional note; ignored by enforcement.</dd>
+        </dl>
+        <p class="dac-help-rejected"><strong>Rejected on publish:</strong> path or tier missing (partial row);
+          invalid tier; non-absolute path; public <code>/**</code> (scope it narrower); unknown audience;
+          duplicate path; equal-specificity overlap between two rows.</p>
+        <p class="dac-help-warn"><strong>Warnings (still publish):</strong> public <code>/*</code>
+          (exposes all top-level paths); a protected/secured row with no audience (any signed-in user);
+          unknown columns.</p>
+        <p class="dac-help-reserved"><strong>Ignored (worker-managed):</strong> rows overlapping a reserved path —
+          ${RESERVED_PATHS.map((p, i) => html`${i ? ', ' : ''}<code>${p}</code>`)}.</p>
+        <p class="dac-help-note">The access-control worker re-validates on publish and is authoritative;
+          the inline checks are advisory.</p>
+      </div>
+    </details>`;
 }
 
 class DaAccessControlApp extends LitElement {
@@ -389,6 +425,7 @@ class DaAccessControlApp extends LitElement {
     if (this._state === 'error') return nothing;
     return html`
       ${this.renderSummary()}
+      ${renderHelp()}
       ${this.renderTable()}`;
   }
 

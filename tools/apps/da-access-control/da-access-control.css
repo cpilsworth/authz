@@ -151,6 +151,47 @@
 .dac-global-error { color: var(--dac-error); }
 .dac-global-warning { color: var(--dac-warning); }
 
+/* constraints help */
+.dac-help {
+  margin: 12px 0;
+  border: 1px solid var(--dac-border);
+  border-radius: 6px;
+  background: var(--dac-bg-subtle);
+  font-size: 13px;
+}
+
+.dac-help > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: #505050;
+}
+
+.dac-help-body { padding: 4px 14px 12px; }
+
+.dac-help-body dl {
+  margin: 0 0 8px;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+}
+
+.dac-help-body dt { font-weight: 600; }
+.dac-help-body dd { margin: 0; color: #505050; }
+.dac-help-body p { margin: 6px 0; color: #505050; }
+
+.dac-help code {
+  background: #fff;
+  border: 1px solid var(--dac-border);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.dac-help-rejected strong { color: var(--dac-error); }
+.dac-help-warn strong { color: var(--dac-warning); }
+.dac-help-note { font-style: italic; }
+
 /* table */
 .dac-table {
   width: 100%;
